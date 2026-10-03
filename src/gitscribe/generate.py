@@ -76,3 +76,77 @@ def parse(text: str) -> dict[str, str]:
     text = re.sub(r"^```\w*[ \t]*$", "", text, flags=re.M)
     parts = re.split(r"^\[(SUMMARY|COMMIT|TITLE|BODY)\][ \t]*$", text, flags=re.M)
     return {parts[i]: parts[i + 1].strip() for i in range(1, len(parts), 2)}
+
+
+COMMIT_SUBJECT_RECOMMENDED = 50
+COMMIT_SUBJECT_MAX = 72
+PR_TITLE_MAX = 80
+PR_SECTIONS = ["Why", "What", "How to Test"]
+PLACEHOLDER = "- (작성 필요)"
+
+
+def prefix_re(cfg: dict) -> re.Pattern:
+    return re.compile(rf"^({'|'.join(map(re.escape, cfg['prefixes']))})(\(.+?\))?!?: \S")
+
+
+def body_sections(body: str) -> dict[str, str]:
+    parts = re.split(r"^##[ \t]+(.+?)[ \t]*$", body, flags=re.M)
+    return {parts[i].strip().lower(): parts[i + 1] for i in range(1, len(parts), 2)}
+
+
+def bullets(text: str) -> list[str]:
+    return [line.strip() for line in text.splitlines() if re.match(r"\s*[-*]\s+\S", line)]
+
+
+def check(kind: str, sections: dict[str, str], cfg: dict) -> list[str]:
+    """형식 규칙 위반 목록을 돌려준다. 비어 있으면 통과."""
+    errors = []
+    if not sections.get("SUMMARY"):
+        errors.append("[SUMMARY] 섹션이 없거나 비어 있습니다.")
+    if kind == "commit":
+        subject = sections.get("COMMIT", "").split("\n", 1)[0].strip()
+        if not subject:
+            errors.append("[COMMIT] 섹션에 커밋 제목이 없습니다.")
+        elif len(subject) > COMMIT_SUBJECT_MAX:
+            errors.append(f"커밋 제목이 {len(subject)}자입니다. {COMMIT_SUBJECT_MAX}자 이내로 줄이세요.")
+        elif not prefix_re(cfg).match(subject):
+            errors.append(f"커밋 제목이 '<prefix>: ' 형식이 아닙니다. prefix: {', '.join(cfg['prefixes'])}")
+        return errors
+
+    title = sections.get("TITLE", "")
+    if not title:
+        errors.append("[TITLE] 섹션에 PR 제목이 없습니다.")
+    elif "\n" in title:
+        errors.append("PR 제목은 한 줄이어야 합니다.")
+    elif len(title) > PR_TITLE_MAX:
+        errors.append(f"PR 제목이 {len(title)}자입니다. {PR_TITLE_MAX}자 이내로 줄이세요.")
+    found = body_sections(sections.get("BODY", ""))
+    for name in PR_SECTIONS:
+        if name.lower() not in found:
+            errors.append(f"PR 본문에 '## {name}' 섹션이 없습니다.")
+        elif not bullets(found[name.lower()]):
+            errors.append(f"'## {name}' 섹션에 '- ' 불릿이 없습니다.")
+    return errors
+
+
+def fix(kind: str, sections: dict[str, str], cfg: dict) -> dict[str, str]:
+    """재생성 후에도 남은 위반을 규칙에 맞게 강제로 다듬는다."""
+    fixed = {"SUMMARY": sections.get("SUMMARY") or "- (요약 없음)"}
+    if kind == "commit":
+        lines = sections.get("COMMIT", "").strip().splitlines() or [""]
+        subject = lines[0].strip()
+        if not prefix_re(cfg).match(subject):
+            subject = f"chore: {subject or '변경 사항 반영'}"
+        fixed["COMMIT"] = "\n".join([subject[:COMMIT_SUBJECT_MAX].rstrip(), *lines[1:]])
+        return fixed
+
+    title = next((line.strip() for line in sections.get("TITLE", "").splitlines() if line.strip()), "변경 사항 반영")
+    fixed["TITLE"] = title[:PR_TITLE_MAX].rstrip()
+    found = body_sections(sections.get("BODY", ""))
+    blocks = []
+    for name in PR_SECTIONS:
+        text = found.get(name.lower(), "")
+        items = bullets(text) or [f"- {line.strip()}" for line in text.splitlines() if line.strip()] or [PLACEHOLDER]
+        blocks.append(f"## {name}\n" + "\n".join(items))
+    fixed["BODY"] = "\n\n".join(blocks)
+    return fixed
