@@ -3,7 +3,7 @@ import os
 import requests
 
 DEFAULT_BASE_URL = "https://copa.codyssey.kr/v1"
-STATUS_HINTS = {401: "인증 실패, API Key 확인", 403: "권한 없음", 404: "엔드포인트/모델 확인", 429: "요청 한도 초과"}
+STATUS_HINTS = {400: "요청 형식 오류이거나, 프록시가 Key 형태가 포함된 응답을 차단함. 재실행해 보세요", 401: "인증 실패, API Key 확인", 403: "권한 없음", 404: "엔드포인트/모델 확인", 429: "요청 한도 초과"}
 
 
 def chat(messages: list[dict], model: str, temperature: float, max_tokens: int) -> str:

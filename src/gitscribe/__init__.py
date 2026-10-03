@@ -75,14 +75,20 @@ def run(args: argparse.Namespace) -> None:
         diff = diff[: args.max_diff_chars]
         log("WARN", f"diff가 {args.max_diff_chars}자를 넘어 잘라서 사용합니다.")
 
-    messages = generate.build_messages(generate.COMMIT_PROMPT, cfg, files, diff, args.context)
+    is_commit = args.command == "commit"
+    template = generate.COMMIT_PROMPT if is_commit else generate.PR_PROMPT
+    messages = generate.build_messages(template, cfg, files, diff, args.context)
     log("INFO", f"AI API 요청 중... (model={args.model})")
     text = ai.chat(messages, args.model, args.temperature, args.max_tokens)
     log("INFO", "API 호출 횟수: 1")
     sections = generate.parse(text)
-    log("DONE", "커밋 메시지 생성 완료")
+    log("DONE", "커밋 메시지 생성 완료" if is_commit else "PR 초안 생성 완료")
     section("Change Summary", sections.get("SUMMARY", ""))
-    section("Commit Message", sections.get("COMMIT", text))
+    if is_commit:
+        section("Commit Message", sections.get("COMMIT", text))
+    else:
+        section("PR Title", sections.get("TITLE", ""))
+        section("PR Body", sections.get("BODY", text))
     print("-" * 22)
 
 
