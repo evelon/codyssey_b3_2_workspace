@@ -4,6 +4,7 @@ import sys
 from dotenv import load_dotenv
 
 from gitscribe import ai, generate, git
+from gitscribe.mask import mask
 
 
 def log(tag: str, message: str) -> None:
@@ -16,6 +17,12 @@ def parse_args() -> argparse.Namespace:
     common.add_argument("--model", default="gpt-5.4-mini", help="AI 모델 (기본: gpt-5.4-mini)")
     common.add_argument("--temperature", type=float, default=0.3, help="생성 다양성 (기본: 0.3)")
     common.add_argument("--max-tokens", type=int, default=1000, help="최대 응답 토큰 수 (기본: 1000)")
+    common.add_argument(
+        "--safe-mode",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="API Key·이메일 등 민감정보를 마스킹한 뒤 전송 (기본: 켜짐, --no-safe-mode로 끔)",
+    )
     common.add_argument("--context", help="변경 이유/요구사항 메모 (프롬프트에 함께 전달)")
 
     parser = argparse.ArgumentParser(prog="gitscribe", description="git diff로 커밋 메시지/PR 초안을 생성합니다.")
@@ -104,6 +111,11 @@ def run(args: argparse.Namespace) -> None:
     if len(diff) > args.max_diff_chars:
         diff = diff[: args.max_diff_chars]
         log("WARN", f"diff가 {args.max_diff_chars}자를 넘어 잘라서 사용합니다.")
+    if args.safe_mode:
+        diff, count = mask(diff)
+        log("INFO", f"safe-mode: 민감정보 {count}건 마스킹")
+    else:
+        log("WARN", "safe-mode 꺼짐: diff를 마스킹 없이 전송합니다.")
 
     is_commit = args.command == "commit"
     template = generate.COMMIT_PROMPT if is_commit else generate.PR_PROMPT
