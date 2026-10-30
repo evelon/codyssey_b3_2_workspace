@@ -64,6 +64,36 @@ def section(title: str, content: str) -> None:
     print(f"\n--- {title} ---\n{content}")
 
 
+def request(args: argparse.Namespace, messages: list[dict], cfg: dict) -> tuple[dict[str, str], str]:
+    """API를 호출하고 형식을 검증한다. 위반하면 1회 재생성하고, 그래도 위반하면 후처리한다."""
+    calls = 0
+    for attempt in range(2):
+        log("INFO", f"AI API 요청 중... (model={args.model})")
+        text = ai.chat(messages, args.model, args.temperature, args.max_tokens)
+        calls += 1
+        sections = generate.parse(text)
+        errors = generate.check(args.command, sections, cfg)
+        if not errors:
+            break
+        log("WARN", "형식 규칙 위반: " + " / ".join(errors))
+        if attempt == 0:
+            log("INFO", "위반 사항을 알려주고 1회 재생성합니다.")
+            feedback = "다음 형식 규칙을 위반했습니다:\n" + "\n".join(f"- {e}" for e in errors)
+            messages = messages + [
+                {"role": "assistant", "content": text},
+                {"role": "user", "content": feedback + "\n규칙을 지켜 출력 형식 전체를 다시 작성하세요."},
+            ]
+    else:
+        log("WARN", "재생성 후에도 형식이 맞지 않아 후처리를 적용합니다.")
+        sections = generate.fix(args.command, sections, cfg)
+    log("INFO", f"API 호출 횟수: {calls}")
+
+    subject = sections.get("COMMIT", "").split("\n", 1)[0]
+    if args.command == "commit" and len(subject) > generate.COMMIT_SUBJECT_RECOMMENDED:
+        log("WARN", f"커밋 제목이 {len(subject)}자입니다. {generate.COMMIT_SUBJECT_RECOMMENDED}자 이내를 권장합니다.")
+    return sections, text
+
+
 def run(args: argparse.Namespace) -> None:
     cfg = generate.load_config(git.repo_root())
     collected = collect_commit(args) if args.command == "commit" else collect_pr(args)
@@ -78,10 +108,7 @@ def run(args: argparse.Namespace) -> None:
     is_commit = args.command == "commit"
     template = generate.COMMIT_PROMPT if is_commit else generate.PR_PROMPT
     messages = generate.build_messages(template, cfg, files, diff, args.context)
-    log("INFO", f"AI API 요청 중... (model={args.model})")
-    text = ai.chat(messages, args.model, args.temperature, args.max_tokens)
-    log("INFO", "API 호출 횟수: 1")
-    sections = generate.parse(text)
+    sections, text = request(args, messages, cfg)
     log("DONE", "커밋 메시지 생성 완료" if is_commit else "PR 초안 생성 완료")
     section("Change Summary", sections.get("SUMMARY", ""))
     if is_commit:
