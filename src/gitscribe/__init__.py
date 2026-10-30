@@ -1,7 +1,9 @@
 import argparse
 import sys
 
-from gitscribe import git
+from dotenv import load_dotenv
+
+from gitscribe import ai, generate, git
 
 
 def log(tag: str, message: str) -> None:
@@ -11,6 +13,10 @@ def log(tag: str, message: str) -> None:
 def parse_args() -> argparse.Namespace:
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--max-diff-chars", type=int, default=20000, help="AI에 보낼 diff 최대 글자 수 (기본: 20000)")
+    common.add_argument("--model", default="gpt-5.4-mini", help="AI 모델 (기본: gpt-5.4-mini)")
+    common.add_argument("--temperature", type=float, default=0.3, help="생성 다양성 (기본: 0.3)")
+    common.add_argument("--max-tokens", type=int, default=1000, help="최대 응답 토큰 수 (기본: 1000)")
+    common.add_argument("--context", help="변경 이유/요구사항 메모 (프롬프트에 함께 전달)")
 
     parser = argparse.ArgumentParser(prog="gitscribe", description="git diff로 커밋 메시지/PR 초안을 생성합니다.")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -54,8 +60,12 @@ def collect_pr(args: argparse.Namespace) -> tuple[list[str], str] | None:
     return files, diff
 
 
+def section(title: str, content: str) -> None:
+    print(f"\n--- {title} ---\n{content}")
+
+
 def run(args: argparse.Namespace) -> None:
-    git.repo_root()
+    cfg = generate.load_config(git.repo_root())
     collected = collect_commit(args) if args.command == "commit" else collect_pr(args)
     if collected is None:
         return
@@ -64,10 +74,20 @@ def run(args: argparse.Namespace) -> None:
     if len(diff) > args.max_diff_chars:
         diff = diff[: args.max_diff_chars]
         log("WARN", f"diff가 {args.max_diff_chars}자를 넘어 잘라서 사용합니다.")
-    print("\n".join(files))
+
+    messages = generate.build_messages(generate.COMMIT_PROMPT, cfg, files, diff, args.context)
+    log("INFO", f"AI API 요청 중... (model={args.model})")
+    text = ai.chat(messages, args.model, args.temperature, args.max_tokens)
+    log("INFO", "API 호출 횟수: 1")
+    sections = generate.parse(text)
+    log("DONE", "커밋 메시지 생성 완료")
+    section("Change Summary", sections.get("SUMMARY", ""))
+    section("Commit Message", sections.get("COMMIT", text))
+    print("-" * 22)
 
 
 def main() -> None:
+    load_dotenv()
     args = parse_args()
     try:
         run(args)
