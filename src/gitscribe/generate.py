@@ -78,8 +78,10 @@ def build_messages(
 
 def parse(text: str) -> dict[str, str]:
     """[SUMMARY]/[COMMIT]/... 마커로 나뉜 응답을 섹션별 dict로 만든다."""
-    text = re.sub(r"^```\w*[ \t]*$", "", text, flags=re.M)
-    parts = re.split(r"^\[(SUMMARY|COMMIT|TITLE|BODY)\][ \t]*$", text, flags=re.M)
+    text = re.sub(r"^```\w*[ \t]*$", "", text, flags=re.MULTILINE)
+    parts = re.split(
+        r"^\[(SUMMARY|COMMIT|TITLE|BODY)\][ \t]*$", text, flags=re.MULTILINE
+    )
     return {parts[i]: parts[i + 1].strip() for i in range(1, len(parts), 2)}
 
 
@@ -97,7 +99,7 @@ def prefix_re(cfg: dict) -> re.Pattern:
 
 
 def body_sections(body: str) -> dict[str, str]:
-    parts = re.split(r"^##[ \t]+(.+?)[ \t]*$", body, flags=re.M)
+    parts = re.split(r"^##[ \t]+(.+?)[ \t]*$", body, flags=re.MULTILINE)
     return {parts[i].strip().lower(): parts[i + 1] for i in range(1, len(parts), 2)}
 
 
