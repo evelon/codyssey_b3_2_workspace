@@ -14,10 +14,21 @@ SAMPLE = """+OPENAI_API_KEY=abcd1234efgh
 
 def test_mask():
     masked, count = mask(SAMPLE)
-    for secret in ["abcd1234efgh", "ghp_", "plainsecret99", "abcdefghijklmnopqrstu", "sk-proj", "hong.gildong", "010-1234"]:
+    for secret in [
+        "abcd1234efgh",
+        "ghp_",
+        "plainsecret99",
+        "abcdefghijklmnopqrstu",
+        "sk-proj",
+        "hong.gildong",
+        "010-1234",
+    ]:
         assert secret not in masked, secret
     # 비밀값이 아닌 코드는 그대로 둔다.
-    assert 'password = request.form["password"]' in masked and "token = get_token()" in masked
+    assert (
+        'password = request.form["password"]' in masked
+        and "token = get_token()" in masked
+    )
     assert count == 7, (count, masked)
 
 
