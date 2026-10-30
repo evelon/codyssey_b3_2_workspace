@@ -26,7 +26,7 @@ def test_parse_and_check_pass():
 def test_commit_violations_and_fix():
     s = {"SUMMARY": "- a", "COMMIT": "Update stuff " + "x" * 80}
     errors = check("commit", s, CFG)
-    assert len(errors) == 1 and "72" in errors[0]
+    assert len(errors) == 2 and "72" in errors[0] and "prefix" in errors[1]
     fixed = fix("commit", s, CFG)
     assert check("commit", fixed, CFG) == [] and fixed["COMMIT"].startswith("chore: Update")
 

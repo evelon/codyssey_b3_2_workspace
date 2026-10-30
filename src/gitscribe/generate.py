@@ -2,7 +2,10 @@ import re
 import tomllib
 from pathlib import Path
 
-DEFAULT_CONFIG = {"language": "한국어", "prefixes": ["feat", "fix", "docs", "refactor", "test", "chore"]}
+DEFAULT_CONFIG = {
+    "language": "한국어",
+    "prefixes": ["feat", "fix", "docs", "refactor", "test", "chore"],
+}
 
 SYSTEM_PROMPT = """너는 git 변경 사항을 읽고 커밋 메시지와 PR 설명을 쓰는 시니어 개발자다.
 - 모든 문장은 {language}로 작성한다. 커밋 prefix, 파일명, 코드 식별자는 원문 그대로 쓴다.
@@ -60,7 +63,9 @@ def load_config(root: Path) -> dict:
         raise RuntimeError(f".gitscribe 설정 파일 형식 오류: {e}") from None
 
 
-def build_messages(template: str, cfg: dict, files: list[str], diff: str, context: str | None) -> list[dict]:
+def build_messages(
+    template: str, cfg: dict, files: list[str], diff: str, context: str | None
+) -> list[dict]:
     user = template.format(prefixes=", ".join(cfg["prefixes"]))
     if context:
         user += f"\n## 변경 이유/요구사항 (작성자 메모)\n{context}\n"
@@ -86,7 +91,9 @@ PLACEHOLDER = "- (작성 필요)"
 
 
 def prefix_re(cfg: dict) -> re.Pattern:
-    return re.compile(rf"^({'|'.join(map(re.escape, cfg['prefixes']))})(\(.+?\))?!?: \S")
+    return re.compile(
+        rf"^({'|'.join(map(re.escape, cfg['prefixes']))})(\(.+?\))?!?: \S"
+    )
 
 
 def body_sections(body: str) -> dict[str, str]:
@@ -95,7 +102,9 @@ def body_sections(body: str) -> dict[str, str]:
 
 
 def bullets(text: str) -> list[str]:
-    return [line.strip() for line in text.splitlines() if re.match(r"\s*[-*]\s+\S", line)]
+    return [
+        line.strip() for line in text.splitlines() if re.match(r"\s*[-*]\s+\S", line)
+    ]
 
 
 def check(kind: str, sections: dict[str, str], cfg: dict) -> list[str]:
@@ -107,19 +116,27 @@ def check(kind: str, sections: dict[str, str], cfg: dict) -> list[str]:
         subject = sections.get("COMMIT", "").split("\n", 1)[0].strip()
         if not subject:
             errors.append("[COMMIT] 섹션에 커밋 제목이 없습니다.")
-        elif len(subject) > COMMIT_SUBJECT_MAX:
-            errors.append(f"커밋 제목이 {len(subject)}자입니다. {COMMIT_SUBJECT_MAX}자 이내로 줄이세요.")
-        elif not prefix_re(cfg).match(subject):
-            errors.append(f"커밋 제목이 '<prefix>: ' 형식이 아닙니다. prefix: {', '.join(cfg['prefixes'])}")
+        else:
+            if len(subject) > COMMIT_SUBJECT_MAX:
+                errors.append(
+                    f"커밋 제목이 {len(subject)}자입니다. {COMMIT_SUBJECT_MAX}자 이내로 줄이세요."
+                )
+            if not prefix_re(cfg).match(subject):
+                errors.append(
+                    f"커밋 제목이 '<prefix>: ' 형식이 아닙니다. prefix: {', '.join(cfg['prefixes'])}"
+                )
         return errors
 
     title = sections.get("TITLE", "")
     if not title:
         errors.append("[TITLE] 섹션에 PR 제목이 없습니다.")
-    elif "\n" in title:
-        errors.append("PR 제목은 한 줄이어야 합니다.")
-    elif len(title) > PR_TITLE_MAX:
-        errors.append(f"PR 제목이 {len(title)}자입니다. {PR_TITLE_MAX}자 이내로 줄이세요.")
+    else:
+        if "\n" in title:
+            errors.append("PR 제목은 한 줄이어야 합니다.")
+        if len(title) > PR_TITLE_MAX:
+            errors.append(
+                f"PR 제목이 {len(title)}자입니다. {PR_TITLE_MAX}자 이내로 줄이세요."
+            )
     found = body_sections(sections.get("BODY", ""))
     for name in PR_SECTIONS:
         if name.lower() not in found:
@@ -140,13 +157,24 @@ def fix(kind: str, sections: dict[str, str], cfg: dict) -> dict[str, str]:
         fixed["COMMIT"] = "\n".join([subject[:COMMIT_SUBJECT_MAX].rstrip(), *lines[1:]])
         return fixed
 
-    title = next((line.strip() for line in sections.get("TITLE", "").splitlines() if line.strip()), "변경 사항 반영")
+    title = next(
+        (
+            line.strip()
+            for line in sections.get("TITLE", "").splitlines()
+            if line.strip()
+        ),
+        "변경 사항 반영",
+    )
     fixed["TITLE"] = title[:PR_TITLE_MAX].rstrip()
     found = body_sections(sections.get("BODY", ""))
     blocks = []
     for name in PR_SECTIONS:
         text = found.get(name.lower(), "")
-        items = bullets(text) or [f"- {line.strip()}" for line in text.splitlines() if line.strip()] or [PLACEHOLDER]
+        items = (
+            bullets(text)
+            or [f"- {line.strip()}" for line in text.splitlines() if line.strip()]
+            or [PLACEHOLDER]
+        )
         blocks.append(f"## {name}\n" + "\n".join(items))
     fixed["BODY"] = "\n\n".join(blocks)
     return fixed
