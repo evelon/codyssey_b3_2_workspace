@@ -192,7 +192,7 @@ uv run python tests/test_mask.py
 
 ```
 src/gitscribe/
-├── __init__.py   # CLI 진입점, 실행 흐름, 검증/재생성 루프
+├── cli.py        # CLI 진입점, 실행 흐름, 검증/재생성 루프
 ├── git.py        # git status/diff 수집
 ├── ai.py         # /chat/completions REST 호출, 오류 처리
 ├── generate.py   # 프롬프트, 응답 파싱, 형식 검증/후처리, .gitscribe 설정
