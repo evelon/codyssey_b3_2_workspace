@@ -1,3 +1,3 @@
-from gitscribe import main
+from gitscribe.cli import main
 
 main()
